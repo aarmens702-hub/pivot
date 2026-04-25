@@ -1,114 +1,60 @@
 # Pivot
 
-A word-ladder game inspired by Lewis Carroll's 1877 puzzle and modern
-takes like Wordle and Weaver. Transform a start word into a target word in
-five moves or fewer — change one letter, or swap to a synonym, until you
-reach the goal.
+A word-ladder game inspired by Lewis Carroll's 1877 puzzle and modern takes like Wordle and Weaver. You change one letter at a time (or swap to a synonym) until the start word becomes the target, in five moves or fewer.
 
-> **Live demo:** _coming soon
-
-
-![CI](https://img.shields.io/badge/CI-passing-success) ![React](https://img.shields.io/badge/React-19-61dafb) ![Node](https://img.shields.io/badge/Node-20-339933) ![License](https://img.shields.io/badge/license-MIT-blue)
+I built this after getting hooked on Weaver and wondering whether decent puzzles could be generated automatically instead of hand-picked. Turns out yes, if you're willing to think about the dictionary as a graph.
 
 ## Features
 
-- **Multiple modes** — daily puzzle (deterministic across all clients per UTC day), random, easy / medium / hard difficulty (par 3 / 4 / 5), antonym themed
-- **Hint** that reveals the next optimal move (small score penalty)
-- **Give up** that reveals the full BFS-shortest solution
-- **Wordle-style emoji share** of your chain after winning
-- **Streak + stats** tracked locally per browser (current streak, best streak, win %, last 7 daily puzzles)
-- **Mobile on-screen keyboard** for phone play
-- **Letter-tile feedback** highlighting positions where your current word already matches the target
+- Daily puzzle that's identical for every player on a given UTC day
+- Random mode plus easy / medium / hard (par 3, 4, 5)
+- Antonym themed mode (start and target are opposites)
+- Hint that reveals the next optimal move, with a small score penalty
+- Give up reveals the full shortest solution
+- Wordle-style emoji share of your chain after a win
+- Streak and stats tracked per browser
+- On-screen keyboard for phone play
+- Letter-tile feedback showing positions that already match the target
 
 ## Stack
 
-- **Frontend:** React 19, Vite 7, Tailwind v4, Framer Motion, lucide-react
-- **Backend:** Express 4, Node 20, Datamuse API (synonyms / antonyms)
-- **Testing:** Vitest + React Testing Library
-- **Deploy:** Vercel (frontend) + Railway (backend)
+React 19, Vite 7, Tailwind v4 on the frontend. Express 4 on Node 20 for the backend, plus the Datamuse API for synonyms and antonyms. Vitest for tests on both sides.
 
-## Architecture
+## How it works
 
-```
-   ┌──────────────────────────┐         ┌──────────────────────────────┐
-   │  React + Vite (browser)  │ ◀─────▶ │  Express (Node 20, Railway)  │
-   └──────────────────────────┘         └──────────────────────────────┘
-                                                 │
-                                                 ├──▶ Weaver dictionary (4,030 words)
-                                                 ├──▶ SCOWL common-word tiers
-                                                 └──▶ Datamuse API (synonyms, antonyms)
-```
+The frontend is a single-page React app. The backend is a small Express server that builds an in-memory adjacency graph of the dictionary at startup, then serves puzzle generation, move validation, and shortest-path solving over a REST API.
 
-The backend builds an in-memory **adjacency graph** of the dictionary at
-startup, exposes a small REST API for puzzle generation, validation, and
-shortest-path solving, and pre-computes pools of puzzles by difficulty so
-`/api/puzzle` is O(1).
+### Wildcard-bucket graph construction
 
-## Design decisions
-
-The work that's actually interesting:
-
-### Wildcard-bucket graph construction — O(N·L), not O(N²)
-
-A naive word-ladder graph compares every pair of words: O(N²) where N is
-the dictionary size. For 4,030 4-letter words that's ~16M comparisons,
-each one a string diff. Instead, we group words by every possible
-single-character wildcard (e.g. `bake → *ake, b*ke, ba*e, bak*`). Words
-sharing a bucket are exactly the words that differ by one letter. Build is
-**O(N · L)** where L is word length, and the resulting 4,030-word graph
-constructs in **22ms**. See [`buildGraph`](server/wordGraph.js).
+The naive way to build a word-ladder graph compares every pair of words, which is O(N²). For 4,030 4-letter words that's ~16M string diffs. Instead I group words by every possible single-character wildcard (e.g. `bake` goes into the buckets `*ake`, `b*ke`, `ba*e`, `bak*`). Words sharing a bucket are exactly the words that differ by one letter. Build is O(N · L), and the 4,030-word graph constructs in about 22ms. See [`buildGraph`](server/wordGraph.js).
 
 ### Split playable / endpoint vocabularies
 
-If the same dictionary supplies both endpoints (start / target) and
-intermediate ladder steps, you face a tradeoff: a tight common list
-(everyone knows the words) doesn't have enough density for varied
-multi-step paths, while a loose Scrabble-style list produces obscure
-starts like `AAHS → ABBA`. Pivot splits the two. The *playable*
-vocabulary (4,030 Weaver words) is dense enough for short ladders to
-exist between any pair, while the *endpoint* vocabulary (intersection
-with SCOWL tiers 10–20, ~923 words) ensures every puzzle's start and
-target are recognizable. See
-[`loadPlayableVocab` / `loadEndpointVocab`](server/wordGraph.js).
+Using one dictionary for both endpoints and intermediate ladder steps forces a bad tradeoff. A tight common-word list lacks density for varied multi-step paths, while a loose Scrabble list produces obscure starts like `AAHS → ABBA`. Pivot uses two lists: ~4,030 Weaver words for the playable graph, and the intersection with SCOWL tiers 10–20 (~923 words) as the endpoint pool. Every puzzle's start and target are recognizable, but the path through the middle can use the wider vocabulary.
 
 ### BFS for both solving and generating
 
-A word ladder is a shortest-path problem on an unweighted graph; BFS
-gives the optimal solution in linear time. Pivot reuses the same BFS for
-two purposes:
-- **Solving** — when the player asks for a hint or gives up, BFS returns
-  the shortest path from the current word to the target.
-- **Generating** — to create a new puzzle, pick a random endpoint, run
-  BFS, collect every other endpoint at distance 3–5, sample one as the
-  target. This guarantees solvability in the player's move budget.
-
-See [`bfsDistances` / `shortestPath`](server/wordGraph.js).
+A word ladder is a shortest-path problem on an unweighted graph, so BFS gives you the optimal answer. The same routine is reused for hints (BFS from the current word to the target) and puzzle generation (pick a random endpoint, run BFS, sample any other endpoint that lands at distance 3–5). See [`bfsDistances` / `shortestPath`](server/wordGraph.js).
 
 ### Deterministic daily puzzles
 
-Daily puzzles need to give every player the *same* puzzle for the *same*
-UTC day, regardless of which server instance handles the request. Pivot
-hashes the date string (`YYYY-MM-DD`) with FNV-1a to seed both the start
-selection and the target selection — same date → same puzzle, no
-database, no shared state. Generated on demand, no precomputed table.
-See [`generateDailyPuzzle`](server/puzzleGen.js).
+The daily puzzle has to be identical for every player regardless of which server instance handles their request, with no database. I hash the date string with FNV-1a and use it to seed the start and target picks. Same date, same puzzle. See [`generateDailyPuzzle`](server/puzzleGen.js).
 
-### Async themed-pool boot
+### Async themed pool
 
-Antonym pairs require Datamuse API calls. Doing these synchronously at
-startup would delay boot by several seconds; doing them per-request would
-hit rate limits. Pivot fires off the antonym fetch as a background task
-after server start — `/api/puzzle?theme=antonym` returns 503 until the
-pool is ready, then succeeds. See
-[`buildAntonymPool`](server/themedGen.js).
+Antonym pairs require Datamuse API calls. Synchronously at boot would add several seconds to startup, and per-request would hit rate limits. The antonym pool builds in the background after server start; `/api/puzzle?theme=antonym` returns 503 until it's ready. See [`buildAntonymPool`](server/themedGen.js).
 
-### Client-side stats
+### Stats live in the browser
 
-Streaks and win rate are stored per-browser via localStorage. No
-accounts, no schema migrations, no auth. Trade-off: stats don't sync
-across devices. For v1 this is the right call; a Postgres-backed
-leaderboard is the natural next step. See
-[`src/services/stats.js`](src/services/stats.js).
+Streaks and win rate are stored in localStorage. No accounts, no schema, no auth. Stats don't sync across devices, which is fine for v1.
+
+## Known limitations
+
+- Stats vanish if you clear browser storage. There's no recovery.
+- Datamuse occasionally times out, which makes antonym mode flaky for the first minute after a deploy.
+- The word list is fixed at the Weaver dictionary. Players can't suggest additions.
+- Cold deploys rebuild the graph each time. Cheap (~22ms), not free.
+- Hint logic just shows the next BFS step, so it can recommend a move that's *technically* optimal but feels weird (an early synonym jump, for instance).
 
 ## Quickstart
 
@@ -117,31 +63,29 @@ git clone https://github.com/<you>/pivot.git
 cd pivot
 npm install
 cd server && npm install && cd ..
-npm run dev:all   # boots Vite (5173) + Express (5174)
+npm run dev:all   # Vite on 5173, Express on 5174
 ```
 
-Open http://localhost:5173.
+Then open http://localhost:5173.
 
-## API reference
+## API
 
-| Method | Path                       | Description                                            |
-| ------ | -------------------------- | ------------------------------------------------------ |
-| GET    | `/api/health`              | Service status, vocab + pool sizes                     |
-| GET    | `/api/puzzle`              | Random puzzle. `?difficulty=easy\|medium\|hard` or `?theme=antonym` |
-| GET    | `/api/puzzle/daily`        | Today's deterministic puzzle. Optional `?date=YYYY-MM-DD` |
-| GET    | `/api/validate`            | Check if a move is legal. `?from=…&word=…`             |
-| GET    | `/api/neighbors/:word`     | All one-letter neighbors of `:word`                    |
-| GET    | `/api/solution`            | Shortest BFS path. `?start=…&target=…`                 |
+- `GET /api/health` returns service status, vocab and pool sizes.
+- `GET /api/puzzle` returns a random puzzle. Optional `?difficulty=easy|medium|hard` or `?theme=antonym`.
+- `GET /api/puzzle/daily` returns today's deterministic puzzle. Optional `?date=YYYY-MM-DD`.
+- `GET /api/validate?from=…&word=…` checks whether a move is legal.
+- `GET /api/neighbors/:word` lists all one-letter neighbors.
+- `GET /api/solution?start=…&target=…` returns the shortest BFS path.
 
 ## Development
 
 ```bash
-npm run dev:all          # web + api together
+npm run dev:all          # web + api
 npm run dev              # web only
 npm run dev:server       # api only
 npm test                 # frontend tests
 cd server && npm test    # backend tests
-npm run build            # production build
+npm run build
 npm run lint
 ```
 
@@ -150,20 +94,20 @@ npm run lint
 ```
 src/
   components/
-    game/              extracted game UI: WordCard, ChainDisplay, GameOver, ...
+    game/              WordCard, ChainDisplay, GameOver, ...
     Keyboard.jsx       on-screen mobile keyboard
     ShareCard.jsx      Wordle-style emoji share
     StatsModal.jsx     streak + stats display
   services/
-    api.js             REST client for the backend
+    api.js             REST client
     stats.js           localStorage stats schema
-  HomePage.jsx         landing screen
-  MenuPage.jsx         mode picker
+  HomePage.jsx
+  MenuPage.jsx
   PivotGame.jsx        gameplay orchestrator
-  constants.js         MAX_MOVES, HINT_COST, etc.
+  constants.js
 server/
   data/weaver_words.txt    4,030-word dictionary
-  wordGraph.js             graph build + BFS + shortest path
+  wordGraph.js             graph build, BFS, shortest path
   puzzleGen.js             puzzle pool + deterministic daily generator
   themedGen.js             async antonym pool builder
   index.js                 Express app + routes
@@ -171,17 +115,13 @@ server/
 
 ## Roadmap
 
-- Postgres-backed global leaderboards with anonymous user IDs
-- More themes (rhymes, hypernyms, related-by-meaning)
+- Postgres-backed leaderboards with anonymous user IDs
 - Multiple word lengths (3, 5, 6 letters)
-- Sentry for error tracking, Plausible for analytics
-- TypeScript migration
 
 ## Credits
 
-- Word list adapted from [Weaver](https://wordwormdormdork.com/) and the
-  SCOWL English wordlist tiers
-- Dictionary definitions from [dictionaryapi.dev](https://dictionaryapi.dev/)
+- Word list adapted from [Weaver](https://wordwormdormdork.com/) and the SCOWL English wordlist tiers
+- Definitions from [dictionaryapi.dev](https://dictionaryapi.dev/)
 - Synonyms and antonyms from [Datamuse](https://www.datamuse.com/api/)
 
 ## License
