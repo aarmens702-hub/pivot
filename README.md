@@ -5,7 +5,8 @@ takes like Wordle and Weaver. Transform a start word into a target word in
 five moves or fewer — change one letter, or swap to a synonym, until you
 reach the goal.
 
-> **Live demo:** _coming soon (after Phase 5 deploy)_
+> **Live demo:** _coming soon
+
 
 ![CI](https://img.shields.io/badge/CI-passing-success) ![React](https://img.shields.io/badge/React-19-61dafb) ![Node](https://img.shields.io/badge/Node-20-339933) ![License](https://img.shields.io/badge/license-MIT-blue)
 
