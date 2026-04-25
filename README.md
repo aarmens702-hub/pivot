@@ -1,5 +1,7 @@
 # Pivot
 
+![Pivot](public/screenshots/demo.gif)
+
 A word-ladder game inspired by Lewis Carroll's 1877 puzzle and modern takes like Wordle and Weaver. You change one letter at a time (or swap to a synonym) until the start word becomes the target, in five moves or fewer.
 
 I built this after getting hooked on Weaver and wondering whether decent puzzles could be generated automatically instead of hand-picked. Turns out yes, if you're willing to think about the dictionary as a graph.
@@ -15,6 +17,12 @@ I built this after getting hooked on Weaver and wondering whether decent puzzles
 - Streak and stats tracked per browser
 - On-screen keyboard for phone play
 - Letter-tile feedback showing positions that already match the target
+
+## Screenshots
+
+| Gameplay | How to Play | Win screen |
+| --- | --- | --- |
+| ![Gameplay](public/screenshots/gameplay.png) | ![How to Play](public/screenshots/how-to-play.png) | ![Win screen](public/screenshots/win.png) |
 
 ## Stack
 

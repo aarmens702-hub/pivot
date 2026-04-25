@@ -15,14 +15,19 @@ export default function ChainDisplay({ chain, definitions, moveTypes, target }) 
           return (
             <motion.div
               key={`${word}-${index}`}
-              initial={{ opacity: 0, x: -20, scale: 0.95 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 20, scale: 0.95 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              initial={{ opacity: 0, y: 40, scale: 0.8 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -60, scale: 0.85, rotate: -2 }}
+              transition={{ type: 'spring', damping: 14, stiffness: 220, mass: 0.8 }}
               className="relative"
             >
               {index > 0 && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2 mb-2 ml-4">
+                <motion.div
+                  initial={{ opacity: 0, x: -12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.12, type: 'spring', damping: 18, stiffness: 260 }}
+                  className="flex items-center gap-2 mb-2 ml-4"
+                >
                   <ChevronRight className="w-4 h-4 text-gray-400" />
                   <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
                     moveType === 'synonym'
