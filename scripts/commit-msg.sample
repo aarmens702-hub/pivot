@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Soft commit-message check. Warns but never blocks.
+# Install: cp scripts/commit-msg.sample .git/hooks/commit-msg && chmod +x .git/hooks/commit-msg
+
+msg_file="$1"
+msg=$(grep -v '^#' "$msg_file" | sed '/^$/d')
+msg_len=${#msg}
+
+if [ "$msg_len" -lt 10 ]; then
+  echo "warn: commit message is only $msg_len chars. Consider expanding." >&2
+fi
+
+added=$(git diff --cached --numstat | awk '{ a += $1 } END { print a + 0 }')
+if [ "$added" -gt 400 ]; then
+  echo "warn: this commit adds $added lines. Consider splitting into smaller commits." >&2
+fi
+
+exit 0

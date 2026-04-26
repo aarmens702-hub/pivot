@@ -28,13 +28,21 @@ I built this after getting hooked on Weaver and wondering whether decent puzzles
 
 React 19, Vite 7, Tailwind v4 on the frontend. Express 4 on Node 20 for the backend, plus the Datamuse API for synonyms and antonyms. Vitest for tests on both sides.
 
+## At a glance
+
+- 39 tests across 6 files, frontend and backend
+- Frontend bundle: 111 KB gzipped (357 KB raw)
+- Word graph (4,030 nodes, 923 endpoint words) built in ~7 ms at boot
+- Three difficulty pools (200 puzzles each) plus a 500-puzzle random pool ready in ~1.4 s
+- Daily puzzle generated on demand from a date hash, no DB
+
 ## How it works
 
 The frontend is a single-page React app. The backend is a small Express server that builds an in-memory adjacency graph of the dictionary at startup, then serves puzzle generation, move validation, and shortest-path solving over a REST API.
 
 ### Wildcard-bucket graph construction
 
-The naive way to build a word-ladder graph compares every pair of words, which is O(N²). For 4,030 4-letter words that's ~16M string diffs. Instead I group words by every possible single-character wildcard (e.g. `bake` goes into the buckets `*ake`, `b*ke`, `ba*e`, `bak*`). Words sharing a bucket are exactly the words that differ by one letter. Build is O(N · L), and the 4,030-word graph constructs in about 22ms. See [`buildGraph`](server/wordGraph.js).
+The naive way to build a word-ladder graph compares every pair of words, which is O(N²). For 4,030 4-letter words that's ~16M string diffs. Instead I group words by every possible single-character wildcard (e.g. `bake` goes into the buckets `*ake`, `b*ke`, `ba*e`, `bak*`). Words sharing a bucket are exactly the words that differ by one letter. Build is O(N · L), and the 4,030-word graph constructs in about 7 ms. See [`buildGraph`](server/wordGraph.js).
 
 ### Split playable / endpoint vocabularies
 
@@ -61,7 +69,7 @@ Streaks and win rate are stored in localStorage. No accounts, no schema, no auth
 - Stats vanish if you clear browser storage. There's no recovery.
 - Datamuse occasionally times out, which makes antonym mode flaky for the first minute after a deploy.
 - The word list is fixed at the Weaver dictionary. Players can't suggest additions.
-- Cold deploys rebuild the graph each time. Cheap (~22ms), not free.
+- Cold deploys rebuild the graph each time. Cheap (~7 ms), not free.
 - Hint logic just shows the next BFS step, so it can recommend a move that's *technically* optimal but feels weird (an early synonym jump, for instance).
 
 ## Quickstart
@@ -125,6 +133,23 @@ server/
 
 - Postgres-backed leaderboards with anonymous user IDs
 - Multiple word lengths (3, 5, 6 letters)
+
+## Working on this
+
+A few habits I try to keep:
+
+- One logical change per commit. Smaller is almost always better.
+- Conventional prefixes: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`.
+- Run `npm test` and `cd server && npm test` before pushing.
+
+If you want the soft commit-message check, install the local hook:
+
+```bash
+cp scripts/commit-msg.sample .git/hooks/commit-msg
+chmod +x .git/hooks/commit-msg
+```
+
+It warns (does not block) on very short messages or oversized diffs.
 
 ## Credits
 
